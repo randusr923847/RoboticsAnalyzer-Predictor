@@ -13,7 +13,6 @@ predavg = list()
 for event in eventkeys:
         res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey)
         data1 = res.json()
-
         teamdata = OrderedDict()
         scoredata = OrderedDict()
         count = 0
@@ -71,26 +70,16 @@ for event in eventkeys:
                 xr = np.array(list(range(length)))
                 n = np.size(xr)
                 xm = np.mean(xr)
-
-                try:
-                        sm = np.mean(score1)
-                        dy = np.sum(xr*score1)- n*xm*sm
-                        dx = np.sum(xr*xr)- n*xm*xm
-                        slope = dy/dx
-                        int = sm-slope*xm
-                        pred = slope*xr+int
-                except:
-                        sm = np.mean(score1)
-                        dy = np.sum(xr1*score1)- n1*xm1*sm
-                        dx = np.sum(xr1*xr1)- n*xm1*xm1
-                        slope = dy/dx
-                        int = sm-slope*xm1
-                        pred = slope*xr1+int
-
+                sm = np.mean(score1)
+                dy = np.sum(xr*score1)- n*xm*sm
+                dx = np.sum(xr*xr)- n*xm*xm
+                slope = dy/dx
+                int = sm-slope*xm
+                pred = slope*xr+int
                 string = ":"
                 c = " , "
                 semi = ';'
-                cscore = 2*(sm) - (np.std(score1))
+                cscore = 5*(sm) - (np.std(score1))**(1/2)
                 infolist['cscore'] = cscore
                 infolist['mean'] = (sm)
 
