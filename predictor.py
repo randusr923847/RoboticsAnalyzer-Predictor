@@ -6,9 +6,20 @@ from collections import OrderedDict
 import requests as rq
 import json
 
-apikey = '' #enter tba api key
-eventkeys = [] #enter list of tba event keys
+apikey = 'Wqt2K6oW76k4u6iYqghgNb1R3uzKcDkVFFhSbLG0vR4qDsAVGdcei5noa1EKRvQO' #enter tba api key
+eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'] #enter list of tba event keys
 predavg = list()
+preds = 0
+tnog = 0
+
+def reject_outliers_iqr(data):
+    q1, q3 = np.percentile(data, [10, 90])
+    iqr = q3 - q1
+
+    lower_bound = q1 - (iqr * 1.5)
+    upper_bound = q3 + (iqr * 1.5)
+    return np.where((data > lower_bound) & (data < upper_bound))
+
 
 for event in eventkeys:
         res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey)
@@ -66,6 +77,9 @@ for event in eventkeys:
                 scores = list(score.split(','))
                 scores = [eval(i) for i in scores]
                 score1 = np.array(scores)
+                #score1 = reject_outliers_iqr(score1)
+                #print(score1)
+                #score1 = np.array(score1)
                 length = score1.size
                 xr = np.array(list(range(length)))
                 n = np.size(xr)
@@ -79,7 +93,7 @@ for event in eventkeys:
                 string = ":"
                 c = " , "
                 semi = ';'
-                cscore = 5*(sm) - (np.std(score1))**(1/2)
+                cscore = 1*(sm) - 0.6*(np.std(score1))**(1/2)
                 infolist['cscore'] = cscore
                 infolist['mean'] = (sm)
 
@@ -134,10 +148,13 @@ for event in eventkeys:
                 print(match[2])
                 print('')
                 matchsum = matchsum + 1
+                print(event)
         print(predictionsum)
         print(matchsum)
         print(predictionsum/matchsum)
         predavg.append(predictionsum/matchsum)
+        preds = preds + predictionsum
+        tnog = matchsum + tnog
 print(predavg)
 sum1 = 0
 sum2 = 0
@@ -147,3 +164,6 @@ for x in predavg:
 print('')
 print("Accuracy:")
 print(100*sum1/sum2)
+print(preds)
+print(tnog)
+print(100*preds/tnog)
