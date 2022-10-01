@@ -5,28 +5,36 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict
 import requests as rq
 import json
+import random
 
 apikey = '' #enter tba api key
-eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'] #enter list of tba event keys
+eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'] #enter list of '22 tba event keys
 predavg = list()
 preds = 0
 tnog = 0
 
+#reject outliers:
 def reject_outliers_iqr(data):
-    q1, q3 = np.percentile(data, [10, 90])
+    q1 = np.percentile(data, 10, interpolation='midpoint')
+    q3 = np.percentile(data, 90, interpolation='midpoint')
     iqr = q3 - q1
-
     lower_bound = q1 - (iqr * 1.5)
     upper_bound = q3 + (iqr * 1.5)
-    return np.where((data > lower_bound) & (data < upper_bound))
+    indexarray = np.where((data > lower_bound) & (data < upper_bound))
+    newdata = list()
+    for x in indexarray:
+        newdata.append(data[x])
+    newdata = np.array(newdata)
+    return newdata
 
 
 for event in eventkeys:
-        res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey)
+        res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey) #web scraping using tba api
         data1 = res.json()
         teamdata = OrderedDict()
         scoredata = OrderedDict()
         count = 0
+        #get team scores from quals:
         for x in (data1):
                 if (x['comp_level'] == 'qm'):
                         blueteams = x["alliances"]["blue"]["team_keys"]
@@ -49,7 +57,7 @@ for event in eventkeys:
                                         update = str(redscore)
                                 teamdata[y[3:]] = update
 
-
+        #get playoff matches to test prediction accuracy / this is for testing only
         matchestobepredicted = OrderedDict()
         for x in (data1):
                 if (x['comp_level'] != 'qm'):
@@ -69,17 +77,17 @@ for event in eventkeys:
                 count = count + 1
         print(matchestobepredicted)
 
+        #give each team a score based on mean match results and consistency
         datadict = OrderedDict()
-
         for team, score in teamdata.items():
 
                 infolist = OrderedDict()
                 scores = list(score.split(','))
                 scores = [eval(i) for i in scores]
                 score1 = np.array(scores)
-                #score1 = reject_outliers_iqr(score1)
-                #print(score1)
-                #score1 = np.array(score1)
+                print(team)
+                score1 = reject_outliers_iqr(score1)
+                print(score1)
                 length = score1.size
                 xr = np.array(list(range(length)))
                 n = np.size(xr)
@@ -103,11 +111,11 @@ for event in eventkeys:
                 datadict[team] = infolist
 
         sorteddict = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['cscore']))
-
+        #print all teams values in increasing order
         for key, value in sorteddict.items():
                 print(key, value)
 
-
+        #uses scores to make predictions on training data / for testing purposes
         predictionsum = 0
         matchsum = 0
         for x, match in matchestobepredicted.items():
@@ -156,11 +164,15 @@ for event in eventkeys:
         preds = preds + predictionsum
         tnog = matchsum + tnog
 print(predavg)
+#uncomment following two lines to plot distribution of accuracy in each event
+#n, bins, patches = plt.hist(predavg, bins = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])
+#plt.show()
 sum1 = 0
 sum2 = 0
 for x in predavg:
         sum1 = sum1 + x
         sum2 = sum2 +1
+#Prints avg accuracy in predictions accross all events
 print('')
 print("Accuracy:")
 print(100*sum1/sum2)
