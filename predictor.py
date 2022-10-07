@@ -8,12 +8,12 @@ import json
 import random
 
 apikey = '' #enter tba api key
-eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'] #enter list of '22 tba event keys
+eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'] #enter list of tba event keys
 predavg = list()
 preds = 0
 tnog = 0
 
-#reject outliers:
+#reject outliers
 def reject_outliers_iqr(data):
     q1 = np.percentile(data, 10, interpolation='midpoint')
     q3 = np.percentile(data, 90, interpolation='midpoint')
@@ -27,37 +27,111 @@ def reject_outliers_iqr(data):
     newdata = np.array(newdata)
     return newdata
 
-
+#run for all events in list
 for event in eventkeys:
-        res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey) #web scraping using tba api
+        res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey) #web scraping to get data using TBA api
         data1 = res.json()
         teamdata = OrderedDict()
+        teamdata1 = OrderedDict()
+        teamdata2 = OrderedDict()
         scoredata = OrderedDict()
         count = 0
-        #get team scores from quals:
+
+        #get team quals data (score, auto, endgame), stores in teamdata, teamdata1, teamdata2
         for x in (data1):
                 if (x['comp_level'] == 'qm'):
                         blueteams = x["alliances"]["blue"]["team_keys"]
                         redteams = x["alliances"]["red"]["team_keys"]
                         bluescore = x["alliances"]["blue"]["score"]
                         redscore = x["alliances"]["red"]["score"]
-
+                        try:
+                            blueauto = x["score_breakdown"]["blue"]["autoPoints"]
+                            redauto = x["score_breakdown"]["red"]["autoPoints"]
+                        except:
+                            blueauto = 0
+                            redauto = 0
+                        count = 1
                         for y in blueteams:
+                                try:
+                                    endgame = x["score_breakdown"]["blue"]["endgameRobot"+str(count)]
+                                except:
+                                    endgame = ''
                                 try:
                                         prevscore = teamdata[y[3:]]
                                         update = str(prevscore) +','+ str(bluescore)
+
+                                        if (endgame == 'Traversal'):
+                                                endgame = teamdata1[y[3:]] + 15
+                                        elif (endgame == 'High'):
+                                                endgame = teamdata1[y[3:]] + 10
+                                        elif (endgame == 'Mid'):
+                                                endgame = teamdata1[y[3:]] + 6
+                                        elif (endgame == 'Low'):
+                                                endgame = teamdata1[y[3:]] + 4
+                                        else:
+                                                endgame = teamdata1[y[3:]]
+
+                                        teamdata2[y[3:]] = teamdata2[y[3:]] + blueauto
                                 except:
                                         update = str(bluescore)
+
+                                        if (endgame == 'Traversal'):
+                                                endgame = 15
+                                        elif (endgame == 'High'):
+                                                endgame = 10
+                                        elif (endgame == 'Mid'):
+                                                endgame =  6
+                                        elif (endgame == 'Low'):
+                                                endgame =  4
+                                        else:
+                                                endgame = 0
+
+                                        teamdata2[y[3:]] = blueauto
                                 teamdata[y[3:]] = update
+                                teamdata1[y[3:]] = endgame
+                                count = count + 1
+                        count = 1
                         for y in redteams:
+                                try:
+                                    endgame = x["score_breakdown"]["red"]["endgameRobot"+str(count)]
+                                except:
+                                    endgame = ''
                                 try:
                                         prevscore = teamdata[y[3:]]
                                         update = str(prevscore) +','+ str(redscore)
+
+                                        if (endgame == 'Traversal'):
+                                                endgame = teamdata1[y[3:]] + 15
+                                        elif (endgame == 'High'):
+                                                endgame = teamdata1[y[3:]] + 10
+                                        elif (endgame == 'Mid'):
+                                                endgame = teamdata1[y[3:]] + 6
+                                        elif (endgame == 'Low'):
+                                                endgame = teamdata1[y[3:]] + 4
+                                        else:
+                                                endgame = teamdata1[y[3:]]
+
+                                        teamdata2[y[3:]] = teamdata2[y[3:]] + redauto
                                 except:
                                         update = str(redscore)
-                                teamdata[y[3:]] = update
 
-        #get playoff matches to test prediction accuracy / this is for testing only
+                                        if (endgame == 'Traversal'):
+                                                endgame =  15
+                                        elif (endgame == 'High'):
+                                                endgame =  10
+                                        elif (endgame == 'Mid'):
+                                                endgame =  6
+                                        elif (endgame == 'Low'):
+                                                endgame =  4
+                                        else:
+                                                endgame = 0
+
+                                        teamdata2[y[3:]] = redauto
+                                teamdata[y[3:]] = update
+                                teamdata1[y[3:]] = endgame
+                                count = count + 1
+
+        #get playoff matches FOR TESTING ONLY
         matchestobepredicted = OrderedDict()
         for x in (data1):
                 if (x['comp_level'] != 'qm'):
@@ -77,17 +151,24 @@ for event in eventkeys:
                 count = count + 1
         print(matchestobepredicted)
 
-        #give each team a score based on mean match results and consistency
         datadict = OrderedDict()
-        for team, score in teamdata.items():
 
+        #calculated score for each team based on mean of scores and standard deviation, all data stored in datadict
+        for team, score in teamdata.items():
+                auto = teamdata2[team]
+                endgame = teamdata1[team]
                 infolist = OrderedDict()
                 scores = list(score.split(','))
                 scores = [eval(i) for i in scores]
                 score1 = np.array(scores)
+                lbr = score1.size
+                auto = auto/lbr
+                endgame = endgame/lbr
                 print(team)
                 score1 = reject_outliers_iqr(score1)
                 print(score1)
+                print(auto)
+                print(endgame)
                 length = score1.size
                 xr = np.array(list(range(length)))
                 n = np.size(xr)
@@ -101,21 +182,46 @@ for event in eventkeys:
                 string = ":"
                 c = " , "
                 semi = ';'
-                cscore = 1*(sm) - 0.6*(np.std(score1))**(1/2)
+                if (auto + endgame == 0):
+                    cscore = (1)*(sm) - 0.6*(np.std(score1))**(1/2)
+                else:
+                    cscore = (sm**(4/3))+30*(endgame + auto)/(np.std(score1)**2)
+                #cscore = (sm**2)/(np.std(score1))
                 infolist['cscore'] = cscore
                 infolist['mean'] = (sm)
 
                 infolist['stnddv'] = np.std(score1)
                 infolist['slope'] = (slope)
+                infolist['auto'] = auto
+                infolist['endgame'] = endgame
 
                 datadict[team] = infolist
 
         sorteddict = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['cscore']))
-        #print all teams values in increasing order
+        sorteddict1 = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['mean']))
+        sorteddict2 = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['auto']))
+
+        #print all the data
         for key, value in sorteddict.items():
                 print(key, value)
 
-        #uses scores to make predictions on training data / for testing purposes
+        print('')
+        print('')
+        print('')
+        print('')
+
+        for key, value in sorteddict1.items():
+                print(key, value)
+
+        print('')
+        print('')
+        print('')
+        print('')
+
+        for key, value in sorteddict2.items():
+                print(key, value)
+
+        #uses calculated scores to predict playoff match results, checks against actual result
         predictionsum = 0
         matchsum = 0
         for x, match in matchestobepredicted.items():
@@ -165,7 +271,7 @@ for event in eventkeys:
         tnog = matchsum + tnog
 print(predavg)
 
-#uncomment following two lines to plot distribution of accuracy in each event
+#uncomment following two lines to show distribution of prediction accuracy
 #n, bins, patches = plt.hist(predavg, bins = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])
 #plt.show()
 
@@ -174,8 +280,7 @@ sum2 = 0
 for x in predavg:
         sum1 = sum1 + x
         sum2 = sum2 +1
-
-#prints avg accuracy in predictions accross all events
+#print overall accuracy accross all events
 print('')
 print("Accuracy:")
 print(100*sum1/sum2)
