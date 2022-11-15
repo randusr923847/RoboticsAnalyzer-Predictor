@@ -2,11 +2,6 @@
 FRC Team Ranking Tool for Scouting
 
 
-written by: Omkar Govil-Nair (randusr923847)
-
-who to blame if it doesn't work lol: Kabir Ramzan (CMEONE)
-
-
 -Uses TBA data to provide offensice, defensive, and overall ranking for teams based on their alliance pairing. Meant to predict performance of alliances.
 
 -Currently set up for optimization and accuracy testing. WARNING!!!!! DO NOT RUN IN CURRENT FORM!!!! TO USE, SEE LAST 3 LINES!!!!!!
@@ -585,41 +580,5 @@ def testpredictions(F1, F2, F3, F4, F5, F6, F7, F8, F9, apikey, eventkeys):
     print(tnog)
     print(100*preds/tnog)
     return preds
-def optimize():
-    f1 = [0,1]
-    f2 = [0,1]
-    f3 = [0,1]
-    f4 = [0,1]
-    f5 = [0,1]
-    f6 = [0,1]
-    f7 = [0,1]
-    f8 = [0,1]
-    f9 = [0,1]
 
-    optimization = list()
-    bestres = 0
-    counting = 0
-
-    for a in f1:
-        for b in f2:
-            for c in f3:
-                for d in f4:
-                    for e in f5:
-                        for f in f6:
-                            for g in f7:
-                                for h in f8:
-                                    for i in f9:
-                                        currentopt = testpredictions(a, b, c, d, e, f, g, h, i, apikey, eventkeys)
-                                        if (currentopt > bestres):
-                                            bestres = currentopt
-                                            optimization = [a,b,c,d,e,f,g,h,i]
-                                        currentset = [a,b,c,d,e,f,g,h,i]
-                                        counting += 1
-                                        print(currentopt)
-                                        print(bestres)
-                                        print(currentset)
-                                        print(counting)
-    print(bestres, optimization)
-#To run, Comment next line and uncomment last line, inserting the event keys you wish to run with.
-optimize()
-#testpredictions(1,0,0,0,0,1,1,1,0, apikey, eventkeys)
+testpredictions(1,0,1,1,0,1,0,1,0, apikey, eventkeys)
