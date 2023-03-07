@@ -314,7 +314,6 @@ for event in eventkeys:
                             for tm4 in others4:
                                 r3 = tm4
                                 print('')
-                                print(count)
                                 print('PERCENT COMPLETE:  ', (count/tNoO)*100, '%')
                                 result = predict(b1, b2, b3, r1, r2, r3)
                                 results[count] = {'b3': b3, 'res': result[0]}
