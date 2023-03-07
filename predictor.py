@@ -1,11 +1,9 @@
-"""
-FRC Team Ranking Tool for Scouting
-
-
--Uses TBA data to provide offensice, defensive, and overall ranking for teams based on their alliance pairing. Meant to predict performance of alliances.
-
--If you have questions about how it works, feel free to contact me as I don't have time rn to write full documentation.
-"""
+'''
+Commented out sections are used for training.
+To use, run 'python predictor.py tba-event-key first-pick-team second-pick-team excluded-team-1,excluded-team-2,excluded-team-3,... tba-api-key'
+Excluded Teams are the teams already part of an alliance.
+Win Rate is the percentage of simulated games won by the tested alliance against every other combination of alliances.
+'''
 
 import pandas as pd
 import numpy as np
@@ -16,567 +14,400 @@ import requests as rq
 import json
 import random
 import os
+import math
+import sys
+
 
 apikey = '' #enter tba api key
-eventkeys = ['flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc', 'cacc'] #enter list of tba event keys
-#'flwp', 'mndu', 'mndu2', 'tant', 'tuis3', 'caph', 'flor', 'nyro', 'scan', 'mxmo', 'okok', 'azfl', 'caoc', 'cave', 'ausc', 'nytr', 'tuis', 'flta', 'paca', 'ilpe', 'ksla', 'azva', 'casd', 'casf', 'tuis2', 'nyli', 'ohcl', 'iacf', 'mokc', 'ndgf', 'wimi', 'code', 'mxto', 'cada', 'camb', 'nyli2', 'tnkn', 'lake', 'mosl', 'wila', 'idbo', 'cafr', 'nvlv', 'cala', 'qcmo1', 'qcmo2', 'alhu', 'ilch', 'mnmi', 'mnmi2', 'oktu', 'utwv', 'caav', 'qcmo3', 'nyny', 'casj', 'cc'
-def testpredictions(F1, F2, F3, F4, F5, F6, F7, F8, F9, apikey, eventkeys):
-    predavg = list()
-    preds = 0
-    tnog = 0
-    resultsw = list()
-    scoresw = list()
-    endw = list()
-    autow = list()
-    deltaw = list()
-    meanw = list()
-    defw = list()
-    w = list()
-    scoresl = list()
-    endl = list()
-    autol = list()
-    deltal = list()
-    meanl = list()
-    defl = list()
-    l = list()
+#at an event, eventkeys should be ['tba-event-key']
+eventkeys = []
+atcomp = 0 #0 = pull data from stored files, 1 = always pull from TBA
+runpreds = 0 #0 = don't run predictions, 1 = run predictions
+this_team = ''
+sec_team = ''
+excluded = []
 
-    def reject_outliers_iqr(data):
-        q1 = np.percentile(data, 10, interpolation='midpoint')
-        q3 = np.percentile(data, 90, interpolation='midpoint')
-        iqr = q3 - q1
-        lower_bound = q1 - (iqr * 1.5)
-        upper_bound = q3 + (iqr * 1.5)
-        #print(lower_bound, upper_bound)
-        if (lower_bound == upper_bound):
-            return data
-        indexarray = np.where((data > lower_bound) & (data < upper_bound))
-        newdata = list()
-        for x in indexarray:
-            newdata.append(data[x])
-        newdata = np.array(newdata)
-        return newdata
+if len(sys.argv) > 1:
+    eventkeys = [sys.argv[1]]
+    this_team = str(sys.argv[2])
+    sec_team = str(sys.argv[3])
+    excluded = str(sys.argv[4]).split(',')
+    apikey = sys.argv[5]
+    if len(sys.argv) > 6:
+        atcomp = sys.argv[6]
+        runpreds = sys.argv[7]
+    else:
+        atcomp = 1
+        runpreds = 1
+#Helper Functions
+def avg(data):
+    data = np.array([data])
+    return np.mean(data)
 
+def std(data):
+    data = np.array([data])
+    return np.std(data)
 
-    for event in eventkeys:
-            path = event+'.json'
-            if (os.path.exists(path)):
-                with open(event+'.json', 'r') as file:
-                    data1 = json.load(file)
+def max(data):
+    data = np.array([data])
+    return np.max(data)
+
+def min(data):
+    data = np.array([data])
+    return np.min(data)
+
+def copy(li1):
+    li_copy = []
+    li_copy.extend(li1)
+    return li_copy
+
+#runs = 0 #for training only
+#correct = 0 #for training only
+#events = 0 #for training only
+#eventdict = OrderedDict() #for training only
+
+for event in eventkeys:
+        try:
+            path = event+'23.json'
+            if (os.path.exists(path) and atcomp == 0):
+                with open(event+'23.json', 'r') as file:
+                    data = json.load(file)
             else:
-                res = rq.get('https://www.thebluealliance.com/api/v3/event/2022'+event+'/matches?X-TBA-Auth-Key='+apikey)
-                data1 = res.json()
-                with open(event+'.json', 'w') as f:
-                    json.dump(data1, f)
-            teamdata = OrderedDict()
-            teamdata1 = OrderedDict()
-            teamdata2 = OrderedDict()
-            teamdata3 = OrderedDict()
-            teamdata4 = OrderedDict()
-            scoredata = OrderedDict()
-            count = 0
-            for x in (data1):
-                    if (x['comp_level'] == 'qm'):
-                            blueteams = x["alliances"]["blue"]["team_keys"]
-                            redteams = x["alliances"]["red"]["team_keys"]
-                            bluescore = x["alliances"]["blue"]["score"]
-                            redscore = x["alliances"]["red"]["score"]
+                headers = {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+                                'Content-Type': 'text/json',
+                            }
+                res = rq.get('https://www.thebluealliance.com/api/v3/event/2023'+event+'/matches?X-TBA-Auth-Key='+apikey, headers=headers)
+                data = res.json()
+                with open(event+'23.json', 'w') as f:
+                    json.dump(data, f)
 
-                            deltab  = bluescore - redscore
+            team_data = OrderedDict()
+            matches_data = OrderedDict()
+            count_mat = 0
+            for x in (data):
+                if x['comp_level'] != 'qm':
+                    matches_data[count_mat] = {'level': x['comp_level'],
+                                               'num': x['match_number'],
+                                               'b1': x["alliances"]["blue"]["team_keys"][0][3:],
+                                               'b2': x["alliances"]["blue"]["team_keys"][1][3:],
+                                               'b3': x["alliances"]["blue"]["team_keys"][2][3:],
+                                               'r1': x["alliances"]["red"]["team_keys"][0][3:],
+                                               'r2': x["alliances"]["red"]["team_keys"][1][3:],
+                                               'r3': x["alliances"]["red"]["team_keys"][2][3:],
+                                               'b-score': x["alliances"]["blue"]["score"],
+                                               'r-score': x["alliances"]["red"]["score"]}
+                count_mat += 1
+                if x['comp_level'] == 'qm':
+                    blue_teams = x["alliances"]["blue"]["team_keys"]
+                    red_teams = x["alliances"]["red"]["team_keys"]
 
-                            deltar = redscore - bluescore
-                            try:
-                                blueauto = x["score_breakdown"]["blue"]["autoPoints"]
-                                redauto = x["score_breakdown"]["red"]["autoPoints"]
-                            except:
-                                blueauto = 0
-                                redauto = 0
-                            count = 1
-                            for y in blueteams:
-                                    try:
-                                        endgame = x["score_breakdown"]["blue"]["endgameRobot"+str(count)]
-                                    except:
-                                        endgame = ''
-                                    try:
-                                            prevscore = teamdata[y[3:]]
-                                            update = str(prevscore) +','+ str(bluescore)
-                                            update1 = teamdata4[y[3:]]
-                                            update1.append([redscore, redteams])
+                    blue_score = x["alliances"]["blue"]["score"]
+                    red_score = x["alliances"]["red"]["score"]
 
-                                            if (endgame == 'Traversal'):
-                                                    endgame = teamdata1[y[3:]] + 15
-                                            elif (endgame == 'High'):
-                                                    endgame = teamdata1[y[3:]] + 10
-                                            elif (endgame == 'Mid'):
-                                                    endgame = teamdata1[y[3:]] + 6
-                                            elif (endgame == 'Low'):
-                                                    endgame = teamdata1[y[3:]] + 4
-                                            else:
-                                                    endgame = teamdata1[y[3:]]
+                    delta_b  = blue_score - red_score
+                    delta_r = red_score - blue_score
 
-                                            teamdata2[y[3:]] = teamdata2[y[3:]] + blueauto
-                                            teamdata3[y[3:]] = teamdata3[y[3:]] + deltab
-                                    except:
-                                            update = str(bluescore)
-                                            update1 = list()
-                                            update1.append([redscore, redteams])
+                    try:
+                        blue_auto = x["score_breakdown"]["blue"]["autoPoints"]
+                        red_auto = x["score_breakdown"]["red"]["autoPoints"]
+                    except:
+                        blue_auto = 0
+                        red_auto = 0
 
-                                            if (endgame == 'Traversal'):
-                                                    endgame = 15
-                                            elif (endgame == 'High'):
-                                                    endgame = 10
-                                            elif (endgame == 'Mid'):
-                                                    endgame =  6
-                                            elif (endgame == 'Low'):
-                                                    endgame =  4
-                                            else:
-                                                    endgame = 0
+                    try:
+                        blue_auto_gpc = x["score_breakdown"]["blue"]["autoGamePieceCount"]
+                        red_auto_gpc = x["score_breakdown"]["red"]["autoGamePieceCount"]
+                    except:
+                        blue_auto_gpc = 0
+                        red_auto_gpc = 0
 
-                                            teamdata2[y[3:]] = blueauto
-                                            teamdata3[y[3:]] = deltab
-                                    teamdata[y[3:]] = update
-                                    teamdata1[y[3:]] = endgame
-                                    teamdata4[y[3:]] = update1
-                                    count = count + 1
-                                    #print(y[3:], update, blueauto, endgame)
-                            count = 1
-                            for y in redteams:
-                                    try:
-                                        endgame = x["score_breakdown"]["red"]["endgameRobot"+str(count)]
-                                    except:
-                                        endgame = ''
-                                    try:
-                                            prevscore = teamdata[y[3:]]
-                                            update = str(prevscore) +','+ str(redscore)
-                                            update1 = teamdata4[y[3:]]
-                                            update1.append([bluescore, blueteams])
+                    try:
+                        blue_auto_gpp = x["score_breakdown"]["blue"]["autoGamePiecePoints"]
+                        red_auto_gpp = x["score_breakdown"]["red"]["autoGamePiecePoints"]
+                    except:
+                        blue_auto_gpp = 0
+                        red_auto_gpp = 0
 
-                                            if (endgame == 'Traversal'):
-                                                    endgame = teamdata1[y[3:]] + 15
-                                            elif (endgame == 'High'):
-                                                    endgame = teamdata1[y[3:]] + 10
-                                            elif (endgame == 'Mid'):
-                                                    endgame = teamdata1[y[3:]] + 6
-                                            elif (endgame == 'Low'):
-                                                    endgame = teamdata1[y[3:]] + 4
-                                            else:
-                                                    endgame = teamdata1[y[3:]]
+                    try:
+                        blue_tele_gpc = x["score_breakdown"]["blue"]["teleopGamePieceCount"]
+                        red_tele_gpc = x["score_breakdown"]["red"]["teleopGamePieceCount"]
+                    except:
+                        blue_tele_gpc = 0
+                        red_tele_gpc = 0
 
-                                            teamdata2[y[3:]] = teamdata2[y[3:]] + redauto
-                                            teamdata3[y[3:]] = teamdata3[y[3:]] + deltar
-                                    except:
-                                            update = str(redscore)
-                                            update1.append([redscore, redteams])
+                    try:
+                        blue_tele_gpp = x["score_breakdown"]["blue"]["teleopGamePiecePoints"]
+                        red_tele_gpp = x["score_breakdown"]["red"]["teleopGamePiecePoints"]
+                    except:
+                        blue_tele_gpp = 0
+                        red_tele_gpp = 0
 
-                                            if (endgame == 'Traversal'):
-                                                    endgame =  15
-                                            elif (endgame == 'High'):
-                                                    endgame =  10
-                                            elif (endgame == 'Mid'):
-                                                    endgame =  6
-                                            elif (endgame == 'Low'):
-                                                    endgame =  4
-                                            else:
-                                                    endgame = 0
+                    try:
+                        blue_charge = x["score_breakdown"]["blue"]["totalChargeStationPoints"]
+                        red_charge = x["score_breakdown"]["red"]["totalChargeStationPoints"]
+                    except:
+                        blue_charge = 0
+                        red_charge = 0
 
-                                            teamdata2[y[3:]] = redauto
-                                            teamdata3[y[3:]] = deltar
-                                    teamdata[y[3:]] = update
-                                    teamdata1[y[3:]] = endgame
-                                    teamdata4[y[3:]] = update1
-                                    #print(y[3:], update, redauto, endgame)
-                                    count = count + 1
-            #print(teamdata, teamdata1, teamdata2)
-            #print(teamdata4)
+                    try:
+                        blue_links = len(x["score_breakdown"]["blue"]["links"])
+                        red_links = len(x["score_breakdown"]["red"]["links"])
+                    except:
+                        blue_links = 0
+                        red_links = 0
 
-            def avg(data):
-                data = np.array([data])
-                #print(data)
-                return np.mean(data)
+                    for y in blue_teams:
+                        match_data = OrderedDict()
+                        match_data['score'] = blue_score
+                        match_data['delta'] = delta_b
+                        match_data['auto'] = blue_auto
+                        match_data['links'] = blue_links
+                        match_data['auto_gpc'] = blue_auto_gpc
+                        match_data['auto_gpp'] = blue_auto_gpp
+                        match_data['tele_gpc'] = blue_tele_gpc
+                        match_data['tele_gpp'] = blue_tele_gpp
+                        match_data['charge'] = blue_charge
+                        try:
+                            count = len(team_data[y[3:]])
+                            team_data[y[3:]][count] = match_data
+                        except:
+                            team_data[y[3:]] = OrderedDict()
+                            team_data[y[3:]][0] = match_data
 
-            def prepscores(data):
-                scores = list(data.split(','))
-                scores = [eval(i) for i in scores]
-                scores = [x for x in scores if x != -1]
-                return scores
+                    for y in red_teams:
+                        match_data = OrderedDict()
+                        match_data['score'] = red_score
+                        match_data['delta'] = delta_r
+                        match_data['auto'] = red_auto
+                        match_data['links'] = red_links
+                        match_data['auto_gpc'] = red_auto_gpc
+                        match_data['auto_gpp'] = red_auto_gpp
+                        match_data['tele_gpc'] = red_tele_gpc
+                        match_data['tele_gpp'] = red_tele_gpp
+                        match_data['charge'] = red_charge
+                        try:
+                            count = len(team_data[y[3:]])
+                            team_data[y[3:]][count] = match_data
+                        except:
+                            team_data[y[3:]] = OrderedDict()
+                            team_data[y[3:]][0] = match_data
 
-            matchestobepredicted = OrderedDict()
-            for x in (data1):
-                    if (x['comp_level'] != 'qm'):
-                            blueteams = x["alliances"]["blue"]["team_keys"]
-                            redteams = x["alliances"]["red"]["team_keys"]
-                            result = x["winning_alliance"]
-                            teamsb = list()
-                            teamsr = list()
-                            for y in blueteams:
-                                    teamsb.append(y[3:])
-                            matchestobepredicted[count] = teamsb
-                            for y in redteams:
-                                    teamsr.append(y[3:])
-                            prevres = matchestobepredicted[count]
-                            update = prevres, teamsr, result
-                            matchestobepredicted[count] = update
-                    count = count + 1
-            #print(matchestobepredicted)
 
-            datadict = OrderedDict()
+            parsed_data = OrderedDict()
+            for team, dict in team_data.items():
 
-            for team, score in teamdata.items():
-                    defensedata = teamdata4[team]
-                    defensescores = 0
-                    defopscores = 0
-                    count = 0
-                    for x, y in defensedata:
-                        defensescores += x
-                        count += 1
-                        defavg = avg([avg(prepscores(teamdata[y[0][3:]])), avg(prepscores(teamdata[y[1][3:]])), avg(prepscores(teamdata[y[2][3:]]))])
-                        defopscores += defavg
-                    defensescores = defensescores/count
-                    defopscores = defopscores/count
-                    defenseability = defopscores - defensescores
-                    auto = teamdata2[team]
-                    endgame = teamdata1[team]
-                    delta = teamdata3[team]
-                    infolist = OrderedDict()
-                    scores = list(score.split(','))
-                    scores = [eval(i) for i in scores]
-                    scores = [x for x in scores if x != -1]
-                    score1 = np.array(scores)
-                    #print(team)
-                    #print('')
-                    #print('')
-                    #print('')
-                    #print('')
-                    #print(score1)
-                    lbr = score1.size
-                    auto = auto/lbr
-                    endgame = endgame/lbr
-                    delta = delta/lbr
-                    score1 = reject_outliers_iqr(score1)
-                    #print(score1)
-                    #print(auto)
-                    #print(endgame)
-                    length = score1.size
-                    xr = np.array(list(range(length)))
-                    n = np.size(xr)
-                    xm = np.mean(xr)
-                    sm = np.mean(score1)
-                    dy = np.sum(xr*score1)- n*xm*sm
-                    dx = np.sum(xr*xr)- n*xm*xm
-                    slope = dy/dx
-                    int = sm-slope*xm
-                    pred = slope*xr+int
-                    string = ":"
-                    c = " , "
-                    semi = ';'
-                    if (auto + endgame == 0):
-                        cscore = (1)*(sm) - 0.6*(np.std(score1))**(1/2)
-                    else:
-                        cscore = (sm**(4/3))+30*(endgame + auto)/(np.std(score1)**2)
-                    #cscore = (sm**2)/(np.std(score1))
-                    infolist['cscore'] = cscore
-                    infolist['mean'] = (sm)
+                scores = list()
+                ppps = list() #ppp = points per piece
+                charges = list()
+                autos = list()
+                deltas = list()
+                links = list()
 
-                    infolist['stnddv'] = np.std(score1)
-                    infolist['slope'] = (slope)
-                    infolist['auto'] = auto
-                    infolist['endgame'] = endgame
-                    infolist['delta'] = delta
-                    infolist['defenseability'] = defenseability
+                for match in team_data[team].items():
 
-                    datadict[team] = infolist
+                    scores.append(match[1]['score'])
 
-            sorteddict = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['cscore']))
-            sorteddict1 = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['mean']))
-            sorteddict2 = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['auto']))
-            sorteddict3 = OrderedDict(sorted(datadict.items(), key=lambda x: x[1]['defenseability']))
+                    tele_gpc = match[1]['tele_gpc']
+                    auto_gpc = match[1]['auto_gpc']
+                    if tele_gpc > 0:
+                        ppps.append(match[1]['tele_gpp']/tele_gpc)
+                    if auto_gpc > 0:
+                        ppps.append(match[1]['auto_gpp']/auto_gpc)
 
-            print('Offensive Rankings (ascending order):')
-            for key, value in sorteddict.items():
-                    print(key, value)
+                    charges.append(match[1]['charge'])
+
+                    autos.append(match[1]['auto'])
+
+                    deltas.append(match[1]['delta'])
+
+                    links.append(match[1]['links'])
+
+                data = OrderedDict()
+                data['avg-score'] = avg(scores)
+                data['std-score'] = std(scores)
+                data['avg-ppp'] = avg(ppps)
+                data['avg-charge'] = avg(charges)
+                data['avg-auto'] = avg(autos)
+                data['avg-delta'] = avg(deltas)
+                data['avg-link'] = avg(links)
+                #data['c-score'] = data['avg-score']*1 - data['std-score']*1 + data['avg-ppp']*1 + data['avg-charge']*0 + data['avg-auto']*0 + data['avg-delta']*1
+                #data['c-score'] = (data['avg-score']*data['avg-ppp'])/(data['std-score'])
+                data['c-score'] = (2*data['avg-score'])/(data['std-score']) + 0.8*data['avg-delta']
+                if np.isnan(data['c-score']):
+                    raise ValueError('C score was NaN')
+                parsed_data[team] = data
+
+            sorted_dict = OrderedDict(sorted(parsed_data.items(), key=lambda x: x[1]['c-score']))
 
             print('')
-            print('')
-            print('')
-            print('')
+            print('DATA:')
+            print('team', 'calc score', 'average score', 'standard deviation', 'average points/piece', 'average charge', 'average auto', 'average delta', 'average links')
+            for team, dict in sorted_dict.items():
+                print(team, dict['c-score'], dict['avg-score'], dict['std-score'], dict['avg-ppp'], dict['avg-charge'], dict['avg-auto'], dict['avg-delta'], dict['avg-link'])
 
-            print('Defensive Rankings (descending order):')
-            for key, value in sorteddict3.items():
-                    print(key, value)
+            def predict(b1, b2, b3, r1, r2, r3):
+                b1 = str(b1)
+                b2 = str(b2)
+                b3 = str(b3)
+                r1 = str(r1)
+                r2 = str(r2)
+                r3 = str(r3)
 
-            print('')
-            print('')
-            print('')
-            print('')
-            """
-            red = ''
+                bms = max([parsed_data[b1]['avg-score'] + parsed_data[b2]['avg-score'] + parsed_data[b3]['avg-score']])
+                rms = max([parsed_data[r1]['avg-score'] + parsed_data[r2]['avg-score'] + parsed_data[r3]['avg-score']])
 
-            while (red != 'exit'):
-                red = input("red alliance teams:")
-                blue = input("blue alliance teams:")
+                bmd = max([parsed_data[b1]['avg-delta'] + parsed_data[b2]['avg-delta'] + parsed_data[b3]['avg-delta']])
+                rmd = max([parsed_data[r1]['avg-delta'] + parsed_data[r2]['avg-delta'] + parsed_data[r3]['avg-delta']])
 
-                red = red.split(',')
-                blue = blue.split(',')
+                bmstd = min([parsed_data[b1]['std-score'] + parsed_data[b2]['std-score'] + parsed_data[b3]['std-score']])
+                rmstd = min([parsed_data[r1]['std-score'] + parsed_data[r2]['std-score'] + parsed_data[r3]['std-score']])
 
-                redlist = list()
-                bluelist = list()
+                bml = max([parsed_data[b1]['avg-link'] + parsed_data[b2]['avg-link'] + parsed_data[b3]['avg-link']])
+                rml = max([parsed_data[r1]['avg-link'] + parsed_data[r2]['avg-link'] + parsed_data[r3]['avg-link']])
 
-                for x in red:
-                    redlist.append(sorteddict[x]['cscore'])
-                for x in blue:
-                    bluelist.append(sorteddict[x]['cscore'])
+                bmr = max([parsed_data[b1]['avg-ppp'] + parsed_data[b2]['avg-ppp'] + parsed_data[b3]['avg-ppp']])
+                rmr = max([parsed_data[r1]['avg-ppp'] + parsed_data[r2]['avg-ppp'] + parsed_data[r3]['avg-ppp']])
 
-                redlist = np.array(redlist)
-                bluelist = np.array(bluelist)
-
-                red = np.mean(redlist)
-                blue = np.mean(bluelist)
-
-                print(red, blue)
-                if (red > blue):
-                    print('red will win')
-                elif (blue > red):
-                    print('blue will win')
+                bluescore = (parsed_data[b1]['c-score'] + parsed_data[b2]['c-score'] + parsed_data[b3]['c-score'])/5 + 0.5*bms + bmd + 5*bml + 5*bmr
+                redscore = (parsed_data[r1]['c-score'] + parsed_data[r2]['c-score'] + parsed_data[r3]['c-score'])/5 + 0.5*rms + rmd + 5*rml + 5*rmr
+                #print(bluescore, redscore)
+                if bluescore > redscore:
+                    return ['blue', bluescore, redscore]
                 else:
-                    print('close match')
+                    return ['red', bluescore, redscore]
+
+
+            def runPreds(b1, b2, exc): #b1 is first pick, b2 is second pick, exc is list of teams to be excluded from search
+                others = list()
+                for tm, dict in sorted_dict.items():
+                    print(tm)
+                    if tm != b1 and tm != b2:
+                        print(tm)
+                        others.append(tm)
+                others_e = copy(others)
+                for i in exc:
+                    try:
+                        others_e.remove(i)
+                    except:
+                        print('passed')
+                length = len(others_e)
+                length2 = len(others)
+                tNoO = length*((math.factorial(length2 - 1))/math.factorial(length2 - 4))
+                results = OrderedDict()
+                count = 0
+                maxWinRate = 0
+                winrates = {}
+                bb3 = 0
+                for tm in others_e:
+                    b3 = tm
+                    others2 = copy(others)
+                    others2.remove(b3)
+                    for tm2 in others2:
+                        r1 = tm2
+                        others3 = copy(others2)
+                        others3.remove(r1)
+                        for tm3 in others3:
+                            r2 = tm3
+                            others4 = copy(others3)
+                            others4.remove(r2)
+                            for tm4 in others4:
+                                r3 = tm4
+                                print('')
+                                print(count)
+                                print('PERCENT COMPLETE:  ', (count/tNoO)*100, '%')
+                                result = predict(b1, b2, b3, r1, r2, r3)
+                                results[count] = {'b3': b3, 'res': result[0]}
+                                count += 1
+                                print('')
+                    runs = 0
+                    wins = 0
+                    for ct, res in results.items():
+                        if res['b3'] == tm:
+                            runs += 1
+                            if res['res'] == 'blue':
+                                wins += 1
+                    winrate = wins/runs
+                    winrates[b3] = (winrate)
+                    if winrate > maxWinRate:
+                        maxWinRate = winrate
+                        bb3 = b3
+
                 print('')
+                print('Team', '     ', 'Estimated Winrate (against any random alliance)')
+                for team in winrates:
+                    print(team, '     ', winrates[team]*100, '%')
+
+            if runpreds == 1:
+                runPreds(this_team, sec_team, excluded)
+            '''
+            eventruns = 0
+            eventcorrect = 0
+            for match, dict in matches_data.items():
                 print('')
+                print('Match Number:', dict['num'], '', 'Competition Level', dict['level'])
+                test = predict(dict['b1'], dict['b2'], dict['b3'], dict['r1'], dict['r2'], dict['r3'])
+                print(test)
+                print(dict['b-score'], dict['r-score'])
+
+                actual = ''
+                if dict['b-score'] > dict['r-score']:
+                    actual = 'blue'
+                else:
+                    actual = 'red'
+                print(actual)
+
                 print('')
+                print(sorted_dict[dict['b1']]['avg-score'], sorted_dict[dict['r1']]['avg-score'])
+                print(sorted_dict[dict['b2']]['avg-score'], sorted_dict[dict['r2']]['avg-score'])
+                print(sorted_dict[dict['b3']]['avg-score'], sorted_dict[dict['r3']]['avg-score'])
                 print('')
-            """
+                print(sorted_dict[dict['b1']]['std-score'], sorted_dict[dict['r1']]['std-score'])
+                print(sorted_dict[dict['b2']]['std-score'], sorted_dict[dict['r2']]['std-score'])
+                print(sorted_dict[dict['b3']]['std-score'], sorted_dict[dict['r3']]['std-score'])
+                print('')
+                print(sorted_dict[dict['b1']]['avg-ppp'], sorted_dict[dict['r1']]['avg-ppp'])
+                print(sorted_dict[dict['b2']]['avg-ppp'], sorted_dict[dict['r2']]['avg-ppp'])
+                print(sorted_dict[dict['b3']]['avg-ppp'], sorted_dict[dict['r3']]['avg-ppp'])
+                print('')
+                print(sorted_dict[dict['b1']]['avg-delta'], sorted_dict[dict['r1']]['avg-delta'])
+                print(sorted_dict[dict['b2']]['avg-delta'], sorted_dict[dict['r2']]['avg-delta'])
+                print(sorted_dict[dict['b3']]['avg-delta'], sorted_dict[dict['r3']]['avg-delta'])
+                print('')
+                print(sorted_dict[dict['b1']]['avg-charge'], sorted_dict[dict['r1']]['avg-charge'])
+                print(sorted_dict[dict['b2']]['avg-charge'], sorted_dict[dict['r2']]['avg-charge'])
+                print(sorted_dict[dict['b3']]['avg-charge'], sorted_dict[dict['r3']]['avg-charge'])
+                print('')
+                print(sorted_dict[dict['b1']]['avg-auto'], sorted_dict[dict['r1']]['avg-auto'])
+                print(sorted_dict[dict['b2']]['avg-auto'], sorted_dict[dict['r2']]['avg-auto'])
+                print(sorted_dict[dict['b3']]['avg-auto'], sorted_dict[dict['r3']]['avg-auto'])
+                print('')
+                print(sorted_dict[dict['b1']]['avg-link'], sorted_dict[dict['r1']]['avg-link'])
+                print(sorted_dict[dict['b2']]['avg-link'], sorted_dict[dict['r2']]['avg-link'])
+                print(sorted_dict[dict['b3']]['avg-link'], sorted_dict[dict['r3']]['avg-link'])
+                print('')
 
-            #for key, value in sorteddict2.items():
-                    #print(key, value)
-
-
-            predictionsum = 0
-            matchsum = 0
-            for x, match in matchestobepredicted.items():
-
-                    ra = match[1]
-                    ba = match[0]
-                    ra = np.array(ra)
-                    ba = np.array(ba)
-
-                    rs = list()
-                    bs = list()
-                    rd = list()
-                    bd = list()
-                    re = list()
-                    be = list()
-                    rat = list()
-                    bat = list()
-                    rm = list()
-                    bm = list()
-                    rdf = list()
-                    bdf = list()
-
-                    for x in ra:
-                            rs.append(sorteddict[x]['cscore'])
-                            rd.append(sorteddict[x]['delta'])
-                            re.append(sorteddict[x]['endgame'])
-                            rat.append(sorteddict[x]['auto'])
-                            rm.append(sorteddict[x]['mean'])
-                            rdf.append(sorteddict[x]['defenseability'])
-
-                    for x in ba:
-                            bs.append(sorteddict[x]['cscore'])
-                            bd.append(sorteddict[x]['delta'])
-                            be.append(sorteddict[x]['endgame'])
-                            bat.append(sorteddict[x]['auto'])
-                            bm.append(sorteddict[x]['mean'])
-                            bdf.append(sorteddict[x]['defenseability'])
-
-                    rs = np.array(rs)
-                    bs = np.array(bs)
-                    rsm = np.max(rs)
-                    bsm = np.max(bs)
-                    #print(rs,bs)
-                    redscore = np.mean(rs)
-                    bluescore = np.mean(bs)
-                    rs = redscore
-                    bs = bluescore
-
-                    rd = np.array(rd)
-                    bd = np.array(bd)
-                    #print(rd,bd)
-                    reddelta = np.mean(rd)
-                    redmd = np.max(rd)
-                    redmnd = np.min(rd)
-                    redds = np.sum(rd)
-                    bluedelta = np.mean(bd)
-                    bluemd = np.max(bd)
-                    bluemnd = np.min(bd)
-                    blueds = np.sum(bd)
-
-                    re = np.array(re)
-                    be = np.array(be)
-                    redend1 = np.sum(re)
-                    blueend1 = np.sum(be)
-                    #print(re,be)
-                    redend = np.mean(re)
-                    blueend = np.mean(be)
-
-                    rat = np.array(rat)
-                    bat = np.array(bat)
-                    #print(rat, bat)
-                    redauto = np.mean(rat)
-                    blueauto = np.mean(bat)
-
-                    rm = np.array(rm)
-                    bm = np.array(bm)
-                    redmean = np.mean(rm)
-                    bluemean = np.mean(bm)
-
-                    rdf = np.array(rdf)
-                    bdf = np.array(bdf)
-                    rds = np.sum(rdf)
-                    bds = np.sum(bdf)
-                    rdm = np.max(rdf)
-                    bdm = np.max(bdf)
-                    reddefense = np.mean(rdf)
-                    bluedefense = np.mean(bdf)
-
-
-
-                    if (abs(redscore - bluescore) < 0.078*redscore):
-                        n = 0
-                        m = 0
-                    else:
-                        n = 0
-                        m = 0
-                    #redscore = (0.15*redscore + redmd + redend + redauto + n*bluedefense)/(4 + m)
-                    #bluescore = (0.15*bluescore + bluemd + blueend + blueauto + n*reddefense)/(4 + m)
-
-                    #redscore = rsm + redmd + 0.5*redend1 + bluedefense
-                    #bluescore = bsm + bluemd + 0.5*blueend1 + reddefense
-
-                    redscore = F1*rsm + F2*redscore + F3*reddelta + F4*redmd + F5*redds + F6*redend + F7*redend1 + F8*redauto + F8*redmean + F9*bluedefense
-                    bluescore = F1*bsm + F2*bluescore + F3*bluedelta + F4*bluemd + F5*blueds + F6*blueend + F7*blueend1 + F8*blueauto + F8*bluemean + F9*reddefense
-                    if(redscore > bluescore):
-                        prediction = 'red'
-                    else:
-                        prediction = 'blue'
-
-
-                    #if (prediction != match[2]):
-
-                    print(ra, '   ', ba)
-                    print('Score:  ', redscore,bluescore)
-                    print('Max Score:  ', rsm, bsm)
-                    print('Delta:  ', reddelta, bluedelta)
-                    print('Delta Info:  ', redmd, redmnd, redds, '   ', bluemd, bluemnd, blueds)
-                    print('End:  ', redend, blueend)
-                    print('End Sum:  ', redend1, blueend1)
-                    print('Auto:  ', redauto, blueauto)
-                    print('Mean: ', redmean, bluemean)
-                    print('Defense:  ', reddefense, bluedefense)
-                    print('Defense Info:  ', rds, rdm, '  ', bds, bdm)
-                    print(redscore, bluescore)
-
-                    """
-                    if (abs(redscore - bluescore) <= 0.008*redscore):
-                            if (redmd > bluemd):
-                                print("Red Alliance should win")
-                                prediction = 'red'
-                            else:
-                                print("Blue Alliance should win")
-                                prediction = 'blue'
-                    """
-
-                    if (redscore > bluescore):
-                            print("Red Alliance should win")
-                            prediction = 'red'
-                    elif (bluescore > redscore):
-                            print("Blue Alliance should win")
-                            prediction = 'blue'
-                    else:
-                            print("Tied, it will be a close match")
-                            prediction = 'b/r'
-
-                    if (prediction == match[2]):
-                            predictionsum = predictionsum + 1
-                    if (match[2] == 'red'):
-                            scoresw.append(redscore)
-                            autow.append(redauto)
-                            endw.append(redend)
-                            deltaw.append(reddelta)
-                            meanw.append(redmean)
-                            defw.append(reddefense)
-                            w.append(rs)
-                            scoresl.append(bluescore)
-                            autol.append(blueauto)
-                            endl.append(blueend)
-                            deltal.append(bluedelta)
-                            meanl.append(bluemean)
-                            defl.append(bluedefense)
-                            l.append(bs)
-                    else:
-                            scoresw.append(bluescore)
-                            autow.append(blueauto)
-                            endw.append(blueend)
-                            deltaw.append(bluedelta)
-                            meanw.append(bluemean)
-                            defw.append(bluedefense)
-                            w.append(bs)
-                            scoresl.append(redscore)
-                            autol.append(redauto)
-                            endl.append(redend)
-                            deltal.append(reddelta)
-                            meanl.append(redmean)
-                            defl.append(reddefense)
-                            l.append(rs)
-                    print(match[2])
-                    print('')
-                    matchsum = matchsum + 1
-                    print(event)
-            print(predictionsum)
-            print(matchsum)
-            if (matchsum != 0):
-                print(predictionsum/matchsum)
-                predavg.append(predictionsum/matchsum)
-            preds = preds + predictionsum
-            tnog = matchsum + tnog
-    print(predavg)
-    #n, bins, patches = plt.hist(predavg, bins = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])
-    #plt.show()
-    #colorlist = ['black', 'forestgreen', 'royalblue', 'fuchsia', 'crimson', 'lawngreen', 'peru', 'lightcoral', 'cornsilk', 'darkorange', 'darkgrey', 'rebeccapurple', 'gold', 'lightseagreen', 'lightskyblue']
-    """
-    #For graphs and visualization of data
-    figure, axis = plt.subplots(4, 2)
-    for i in range(len(scoresl) - 1):
-        axis[0,0].scatter(scoresl, scoresw, color='green')
-        axis[0,0].scatter(scoresl, scoresl, color='red')
-
-        axis[0,1].scatter(autol, autow, color='green')
-        axis[0,1].scatter(autol, autol, color='red')
-
-        axis[1,0].scatter(endl, endw, color='green')
-        axis[1,0].scatter(endl, endl, color='red')
-
-        axis[1,1].scatter(deltal, deltaw, color='green')
-        axis[1,1].scatter(deltal, deltal, color='red')
-
-        axis[2,0].scatter(meanl, meanw, color='green')
-        axis[2,0].scatter(meanl, meanl, color='red')
-
-        axis[2,1].scatter(l, w, color='green')
-        axis[2,1].scatter(l, l, color='red')
-
-        axis[3,0].scatter(defl, defw, color='green')
-        axis[3,0].scatter(defl, defl, color='red')
-    plt.show()
-    """
-    sum1 = 0
-    sum2 = 0
-    for x in predavg:
-            sum1 = sum1 + x
-            sum2 = sum2 +1
+                runs += 1
+                eventruns += 1
+                if actual == test[0]:
+                    correct += 1
+                    eventcorrect += 1
+                eventdict[event] = {'percent': (eventcorrect/eventruns)*100, 'runs': eventruns}
+                print(event)
+            events += 1
+        '''
+        except Exception as e:
+            print(e)
+'''
+for ev, data in eventdict.items():
     print('')
-    print("Accuracy:")
-    print(100*sum1/sum2)
-    print(preds)
-    print(tnog)
-    print(100*preds/tnog)
-    return preds
+    print('Event', 'Percentage', '# of Runs')
+    print(ev, data['percent'], data['runs'])
 
-testpredictions(1,0,1,1,0,1,0,1,0, apikey, eventkeys)
+print('')
+print(events)
+print(correct)
+print(runs)
+print(correct/runs)
+print((correct/runs)*100)
+'''
