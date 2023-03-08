@@ -5,14 +5,11 @@ Excluded Teams are the teams already part of an alliance.
 Win Rate is the percentage of simulated games won by the tested alliance against every other combination of alliances.
 '''
 
-import pandas as pd
 import numpy as np
-from scipy import stats
-import matplotlib.pyplot as plt
 from collections import OrderedDict
 import requests as rq
+from alive_progress import alive_bar
 import json
-import random
 import os
 import math
 import sys
@@ -231,18 +228,16 @@ for event in eventkeys:
                 data['avg-auto'] = avg(autos)
                 data['avg-delta'] = avg(deltas)
                 data['avg-link'] = avg(links)
-                #data['c-score'] = data['avg-score']*1 - data['std-score']*1 + data['avg-ppp']*1 + data['avg-charge']*0 + data['avg-auto']*0 + data['avg-delta']*1
-                #data['c-score'] = (data['avg-score']*data['avg-ppp'])/(data['std-score'])
                 data['c-score'] = (2*data['avg-score'])/(data['std-score']) + 0.8*data['avg-delta']
                 if np.isnan(data['c-score']):
-                    raise ValueError('C score was NaN')
+                    raise ValueError('Tried to calculate score, got NaN!')
                 parsed_data[team] = data
 
             sorted_dict = OrderedDict(sorted(parsed_data.items(), key=lambda x: x[1]['c-score']))
 
             print('')
             print('DATA:')
-            print('team', 'calc score', 'average score', 'standard deviation', 'average points/piece', 'average charge', 'average auto', 'average delta', 'average links')
+            print('team', 'calc-score', 'average-score', 'standard-deviation', 'average_points/piece', 'average-charge', 'average-auto', 'average-delta', 'average-links')
             for team, dict in sorted_dict.items():
                 print(team, dict['c-score'], dict['avg-score'], dict['std-score'], dict['avg-ppp'], dict['avg-charge'], dict['avg-auto'], dict['avg-delta'], dict['avg-link'])
 
@@ -281,16 +276,14 @@ for event in eventkeys:
             def runPreds(b1, b2, exc): #b1 is first pick, b2 is second pick, exc is list of teams to be excluded from search
                 others = list()
                 for tm, dict in sorted_dict.items():
-                    print(tm)
                     if tm != b1 and tm != b2:
-                        print(tm)
                         others.append(tm)
                 others_e = copy(others)
                 for i in exc:
                     try:
                         others_e.remove(i)
                     except:
-                        print('passed')
+                        print(' ')
                 length = len(others_e)
                 length2 = len(others)
                 tNoO = length*((math.factorial(length2 - 1))/math.factorial(length2 - 4))
@@ -299,38 +292,38 @@ for event in eventkeys:
                 maxWinRate = 0
                 winrates = {}
                 bb3 = 0
-                for tm in others_e:
-                    b3 = tm
-                    others2 = copy(others)
-                    others2.remove(b3)
-                    for tm2 in others2:
-                        r1 = tm2
-                        others3 = copy(others2)
-                        others3.remove(r1)
-                        for tm3 in others3:
-                            r2 = tm3
-                            others4 = copy(others3)
-                            others4.remove(r2)
-                            for tm4 in others4:
-                                r3 = tm4
-                                print('')
-                                print('PERCENT COMPLETE:  ', (count/tNoO)*100, '%')
-                                result = predict(b1, b2, b3, r1, r2, r3)
-                                results[count] = {'b3': b3, 'res': result[0]}
-                                count += 1
-                                print('')
-                    runs = 0
-                    wins = 0
-                    for ct, res in results.items():
-                        if res['b3'] == tm:
-                            runs += 1
-                            if res['res'] == 'blue':
-                                wins += 1
-                    winrate = wins/runs
-                    winrates[b3] = (winrate)
-                    if winrate > maxWinRate:
-                        maxWinRate = winrate
-                        bb3 = b3
+
+                with alive_bar(int(tNoO), bar = 'classic', spinner = 'triangles') as bar:
+                    for tm in others_e:
+                        b3 = tm
+                        others2 = copy(others)
+                        others2.remove(b3)
+                        for tm2 in others2:
+                            r1 = tm2
+                            others3 = copy(others2)
+                            others3.remove(r1)
+                            for tm3 in others3:
+                                r2 = tm3
+                                others4 = copy(others3)
+                                others4.remove(r2)
+                                for tm4 in others4:
+                                    r3 = tm4
+                                    bar()
+                                    result = predict(b1, b2, b3, r1, r2, r3)
+                                    results[count] = {'b3': b3, 'res': result[0]}
+                                    count += 1
+                        runs = 0
+                        wins = 0
+                        for ct, res in results.items():
+                            if res['b3'] == tm:
+                                runs += 1
+                                if res['res'] == 'blue':
+                                    wins += 1
+                        winrate = wins/runs
+                        winrates[b3] = (winrate)
+                        if winrate > maxWinRate:
+                            maxWinRate = winrate
+                            bb3 = b3
 
                 print('')
                 print('Team', '     ', 'Estimated Winrate (against any random alliance)')
@@ -339,6 +332,7 @@ for event in eventkeys:
 
             if runpreds == 1:
                 runPreds(this_team, sec_team, excluded)
+
             '''
             eventruns = 0
             eventcorrect = 0
