@@ -1,4 +1,4 @@
-# Robotics_Analyser/Predictor
+# Robotics Analyser/Predictor (For '23 season only, updated versions are part of [The Purple Warehouse](https://github.com/HarkerRobo/the-purple-warehous))
 
 FRC Team Ranking Tool for Scouting
 
